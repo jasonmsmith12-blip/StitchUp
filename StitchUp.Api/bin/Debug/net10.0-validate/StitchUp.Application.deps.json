@@ -1,0 +1,53 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "StitchUp.Application/1.0.0": {
+        "dependencies": {
+          "StitchUp.Contracts": "1.0.0",
+          "StitchUp.Domain": "1.0.0"
+        },
+        "runtime": {
+          "StitchUp.Application.dll": {}
+        }
+      },
+      "StitchUp.Contracts/1.0.0": {
+        "runtime": {
+          "StitchUp.Contracts.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "StitchUp.Domain/1.0.0": {
+        "runtime": {
+          "StitchUp.Domain.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "StitchUp.Application/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "StitchUp.Contracts/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "StitchUp.Domain/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

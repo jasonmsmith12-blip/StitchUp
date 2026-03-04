@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="StitchUp.Api/StitchUp.Api.csproj" />
+  <Project Path="StitchUp.Application/StitchUp.Application.csproj" />
+  <Project Path="StitchUp.Contracts/StitchUp.Contracts.csproj" />
+  <Project Path="StitchUp.Domain/StitchUp.Domain.csproj" />
+  <Project Path="StitchUp.Infrastructure/StitchUp.Infrastructure.csproj" />
+</Solution>

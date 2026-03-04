@@ -1,0 +1,7 @@
+{
+  "StitchUp.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Api",
+  "StitchUp.Application, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Application",
+  "StitchUp.Contracts, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Contracts",
+  "StitchUp.Domain, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain",
+  "StitchUp.Infrastructure, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Infrastructure"
+}

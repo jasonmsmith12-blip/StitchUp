@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>809919d9-b2e2-49f9-b78f-70457522b314</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.27.0" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\StitchUp.Application\StitchUp.Application.csproj" />
+    <ProjectReference Include="..\StitchUp.Contracts\StitchUp.Contracts.csproj" />
+    <ProjectReference Include="..\StitchUp.Infrastructure\StitchUp.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

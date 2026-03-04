@@ -1,0 +1,17 @@
+C:\source\StichUp\StitchUp.Backend\StitchUp.Contracts\bin\Debug\net10.0\StitchUp.Contracts.deps.json
+C:\source\StichUp\StitchUp.Backend\StitchUp.Contracts\bin\Debug\net10.0\StitchUp.Contracts.dll
+C:\source\StichUp\StitchUp.Backend\StitchUp.Contracts\bin\Debug\net10.0\StitchUp.Contracts.pdb
+C:\source\StichUp\StitchUp.Backend\StitchUp.Contracts\obj\Debug\net10.0\StitchUp.Contracts.GeneratedMSBuildEditorConfig.editorconfig
+C:\source\StichUp\StitchUp.Backend\StitchUp.Contracts\obj\Debug\net10.0\StitchUp.Contracts.AssemblyInfoInputs.cache
+C:\source\StichUp\StitchUp.Backend\StitchUp.Contracts\obj\Debug\net10.0\StitchUp.Contracts.AssemblyInfo.cs
+C:\source\StichUp\StitchUp.Backend\StitchUp.Contracts\obj\Debug\net10.0\StitchUp.Contracts.csproj.CoreCompileInputs.cache
+C:\source\StichUp\StitchUp.Backend\StitchUp.Contracts\obj\Debug\net10.0\StitchUp.Contracts.dll
+C:\source\StichUp\StitchUp.Backend\StitchUp.Contracts\obj\Debug\net10.0\refint\StitchUp.Contracts.dll
+C:\source\StichUp\StitchUp.Backend\StitchUp.Contracts\obj\Debug\net10.0\StitchUp.Contracts.pdb
+C:\source\StichUp\StitchUp.Backend\StitchUp.Contracts\obj\Debug\net10.0\ref\StitchUp.Contracts.dll
+C:\source\StichUp\StitchUp.Backend\.artifacts\api-build-check\StitchUp.Contracts.deps.json
+C:\source\StichUp\StitchUp.Backend\.artifacts\api-build-check\StitchUp.Contracts.dll
+C:\source\StichUp\StitchUp.Backend\.artifacts\api-build-check\StitchUp.Contracts.pdb
+C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\StitchUp.Contracts.deps.json
+C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\StitchUp.Contracts.dll
+C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\StitchUp.Contracts.pdb
