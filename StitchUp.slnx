@@ -4,4 +4,5 @@
   <Project Path="StitchUp.Contracts/StitchUp.Contracts.csproj" />
   <Project Path="StitchUp.Domain/StitchUp.Domain.csproj" />
   <Project Path="StitchUp.Infrastructure/StitchUp.Infrastructure.csproj" />
+  <Project Path="StitchUp.TranscodeWorker/StitchUp.TranscodeWorker.csproj" />
 </Solution>
