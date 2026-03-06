@@ -46,6 +46,9 @@ public class Worker : BackgroundService
         LogLine(
             $"Loaded options account={_options.StorageAccount}, raw={_options.RawContainer}, converted={_options.ConvertedContainer}, queue={_options.QueueName}");
 
+        await UploadStartupDiagnosticAsync(stoppingToken);
+        LogLine("Uploaded startup diagnostics to diagnostics/startup.txt");
+
         try
         {
             await _queueClient.CreateIfNotExistsAsync(cancellationToken: stoppingToken);
@@ -254,6 +257,22 @@ public class Worker : BackgroundService
         await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(executionLog.ToString()));
         await logBlob.UploadAsync(stream, overwrite: true, cancellationToken: cancellationToken);
         _logger.LogInformation("Uploaded diagnostic execution log to diagnostics/last-worker-log.txt");
+    }
+
+    private async Task UploadStartupDiagnosticAsync(CancellationToken cancellationToken)
+    {
+        var startupBlob = _convertedContainer.GetBlobClient("diagnostics/startup.txt");
+        var content = new StringBuilder()
+            .AppendLine($"timestampUtc={DateTime.UtcNow:O}")
+            .AppendLine("worker started")
+            .AppendLine($"storageAccount={_options.StorageAccount}")
+            .AppendLine($"rawContainer={_options.RawContainer}")
+            .AppendLine($"convertedContainer={_options.ConvertedContainer}")
+            .AppendLine($"queueName={_options.QueueName}")
+            .ToString();
+
+        await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        await startupBlob.UploadAsync(stream, overwrite: true, cancellationToken: cancellationToken);
     }
 
     private async Task DeleteMessageAsync(QueueMessage message, CancellationToken cancellationToken)
