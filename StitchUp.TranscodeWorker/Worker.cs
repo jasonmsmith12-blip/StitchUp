@@ -105,12 +105,18 @@ public class Worker : BackgroundService
         CancellationToken cancellationToken)
     {
         var messageText = message.MessageText;
+        await logAndFlushAsync($"queue message raw text: {messageText}");
+        if (TryDecodeBase64ToUtf8(messageText, out var decodedText))
+        {
+            await logAndFlushAsync($"queue message decoded base64 text: {decodedText}");
+        }
+
         if (!TryDeserializeMessage(messageText, out var request))
         {
-            _logger.LogWarning("Invalid queue message JSON. Deleting messageId={MessageId}", message.MessageId);
-            await logAndFlushAsync($"Invalid queue message JSON. Deleting messageId={message.MessageId}");
-            await DeleteMessageAsync(message, cancellationToken);
-            return;
+            var parseError = "Unable to parse queue message as JSON or base64 JSON";
+            _logger.LogError("Invalid queue message JSON. messageId={MessageId}", message.MessageId);
+            await logAndFlushAsync($"Invalid queue message JSON. messageId={message.MessageId}");
+            throw new InvalidOperationException(parseError);
         }
 
         await logAndFlushAsync("message decoded");
@@ -203,16 +209,50 @@ public class Worker : BackgroundService
             return false;
         }
 
-        request = JsonSerializer.Deserialize<TranscodeRequestMessage>(messageText, JsonOptions) ?? new TranscodeRequestMessage();
-        if (!string.IsNullOrWhiteSpace(request.RawBlobName) || !string.IsNullOrWhiteSpace(request.OutputBlobName))
+        try
         {
-            return true;
+            request = JsonSerializer.Deserialize<TranscodeRequestMessage>(messageText, JsonOptions) ?? new TranscodeRequestMessage();
+            if (!string.IsNullOrWhiteSpace(request.RawBlobName) || !string.IsNullOrWhiteSpace(request.OutputBlobName))
+            {
+                return true;
+            }
+        }
+        catch
+        {
+            // Direct JSON parse failed; fall through to base64 decode attempt.
+        }
+
+        if (TryDecodeBase64ToUtf8(messageText, out var decoded))
+        {
+            try
+            {
+                request = JsonSerializer.Deserialize<TranscodeRequestMessage>(decoded, JsonOptions) ?? new TranscodeRequestMessage();
+                if (!string.IsNullOrWhiteSpace(request.RawBlobName) || !string.IsNullOrWhiteSpace(request.OutputBlobName))
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+                // Swallow and return false below.
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryDecodeBase64ToUtf8(string? input, out string decodedText)
+    {
+        decodedText = string.Empty;
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return false;
         }
 
         try
         {
-            var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(messageText));
-            request = JsonSerializer.Deserialize<TranscodeRequestMessage>(decoded, JsonOptions) ?? new TranscodeRequestMessage();
+            var bytes = Convert.FromBase64String(input);
+            decodedText = Encoding.UTF8.GetString(bytes);
             return true;
         }
         catch
