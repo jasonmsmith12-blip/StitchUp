@@ -35,36 +35,38 @@ public class Worker : BackgroundService
     {
         var executionLog = new StringBuilder();
 
-        void LogLine(string message)
+        async Task LogAndFlushAsync(string message)
         {
             var line = $"[{DateTime.UtcNow:O}] {message}";
             executionLog.AppendLine(line);
             _logger.LogInformation("{Message}", line);
+            await UploadDiagnosticLogAsync(executionLog, stoppingToken);
         }
 
-        LogLine("Worker start");
-        LogLine(
+        await LogAndFlushAsync("worker start");
+        await LogAndFlushAsync(
             $"Loaded options account={_options.StorageAccount}, raw={_options.RawContainer}, converted={_options.ConvertedContainer}, queue={_options.QueueName}");
 
         await UploadStartupDiagnosticAsync(stoppingToken);
-        LogLine("Uploaded startup diagnostics to diagnostics/startup.txt");
+        await LogAndFlushAsync("Uploaded startup diagnostics to diagnostics/startup.txt");
 
         try
         {
             await _queueClient.CreateIfNotExistsAsync(cancellationToken: stoppingToken);
-            LogLine($"Queue ready: {_queueClient.Name}");
+            await LogAndFlushAsync($"Queue ready: {_queueClient.Name}");
         }
         catch (Exception ex)
         {
             executionLog.AppendLine($"[{DateTime.UtcNow:O}] Queue init failed");
             executionLog.AppendLine(ex.ToString());
             _logger.LogError(ex, "Queue init failed");
+            await UploadDiagnosticLogAsync(executionLog, stoppingToken);
             throw;
         }
 
         try
         {
-            LogLine($"Polling queue {_queueClient.Name}");
+            await LogAndFlushAsync($"queue polling started: {_queueClient.Name}");
             var response = await _queueClient.ReceiveMessagesAsync(
                 maxMessages: 1,
                 visibilityTimeout: MessageVisibilityTimeout,
@@ -73,91 +75,93 @@ public class Worker : BackgroundService
             var message = response.Value.FirstOrDefault();
             if (message is null)
             {
-                LogLine("No queue messages available. Exiting.");
+                await LogAndFlushAsync("No queue messages available. Exiting.");
                 return;
             }
 
-            LogLine($"Dequeue result: message found");
-            LogLine($"Message id: {message.MessageId}");
-            await ProcessMessageAsync(message, executionLog, LogLine, stoppingToken);
+            await LogAndFlushAsync($"message dequeued id={message.MessageId}");
+            await ProcessMessageAsync(message, executionLog, LogAndFlushAsync, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
-            LogLine("Cancellation requested. Exiting worker.");
+            await LogAndFlushAsync("Cancellation requested. Exiting worker.");
         }
         catch (Exception ex)
         {
             executionLog.AppendLine($"[{DateTime.UtcNow:O}] Unhandled worker exception");
             executionLog.AppendLine(ex.ToString());
             _logger.LogError(ex, "Unhandled transcode loop error.");
+            await UploadDiagnosticLogAsync(executionLog, stoppingToken);
             throw;
         }
 
-        LogLine("Transcode worker stopped.");
+        await LogAndFlushAsync("Transcode worker stopped.");
     }
 
     private async Task ProcessMessageAsync(
         QueueMessage message,
         StringBuilder executionLog,
-        Action<string> logLine,
+        Func<string, Task> logAndFlushAsync,
         CancellationToken cancellationToken)
     {
         var messageText = message.MessageText;
         if (!TryDeserializeMessage(messageText, out var request))
         {
             _logger.LogWarning("Invalid queue message JSON. Deleting messageId={MessageId}", message.MessageId);
-            logLine($"Invalid queue message JSON. Deleting messageId={message.MessageId}");
+            await logAndFlushAsync($"Invalid queue message JSON. Deleting messageId={message.MessageId}");
             await DeleteMessageAsync(message, cancellationToken);
             return;
         }
+
+        await logAndFlushAsync("message decoded");
 
         if (string.IsNullOrWhiteSpace(request.RawBlobName) || string.IsNullOrWhiteSpace(request.OutputBlobName))
         {
             _logger.LogWarning(
                 "Queue message missing required fields rawBlobName/outputBlobName. Deleting messageId={MessageId}",
                 message.MessageId);
-            logLine($"Queue message missing required fields. Deleting messageId={message.MessageId}");
+            await logAndFlushAsync($"Queue message missing required fields. Deleting messageId={message.MessageId}");
             await DeleteMessageAsync(message, cancellationToken);
             return;
         }
 
-        logLine($"rawBlobName: {request.RawBlobName}");
-        logLine($"outputBlobName: {request.OutputBlobName}");
+        await logAndFlushAsync($"rawBlobName: {request.RawBlobName}");
+        await logAndFlushAsync($"outputBlobName: {request.OutputBlobName}");
 
         var tempInput = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}{Path.GetExtension(request.RawBlobName)}");
         var tempOutput = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.mp4");
 
         try
         {
-            logLine($"Raw blob download start: {request.RawBlobName}");
+            await logAndFlushAsync($"raw blob download started: {request.RawBlobName}");
 
             var rawBlobClient = _rawContainer.GetBlobClient(request.RawBlobName);
             await rawBlobClient.DownloadToAsync(tempInput, cancellationToken);
-            logLine($"Raw blob download end: {request.RawBlobName}");
+            await logAndFlushAsync($"raw blob download completed: {request.RawBlobName}");
 
-            logLine($"ffmpeg command start: ffmpeg -y -i \"{tempInput}\" -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k \"{tempOutput}\"");
+            await logAndFlushAsync($"ffmpeg started args: -y -i \"{tempInput}\" -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k \"{tempOutput}\"");
             var ffmpegResult = await RunFfmpegAsync(tempInput, tempOutput, cancellationToken);
-            logLine($"ffmpeg exit code: {ffmpegResult.ExitCode}");
+            await logAndFlushAsync($"ffmpeg exited code={ffmpegResult.ExitCode}");
 
             if (!string.IsNullOrWhiteSpace(ffmpegResult.StandardOutput))
             {
-                logLine($"ffmpeg stdout: {ffmpegResult.StandardOutput}");
+                await logAndFlushAsync($"ffmpeg stdout: {ffmpegResult.StandardOutput}");
             }
 
             if (!string.IsNullOrWhiteSpace(ffmpegResult.StandardError))
             {
-                logLine($"ffmpeg stderr: {ffmpegResult.StandardError}");
+                await logAndFlushAsync($"ffmpeg stderr: {ffmpegResult.StandardError}");
             }
 
-            logLine($"Upload start: {request.OutputBlobName}");
+            await logAndFlushAsync($"output upload started: {request.OutputBlobName}");
             var outputBlobClient = _convertedContainer.GetBlobClient(request.OutputBlobName);
             await outputBlobClient.UploadAsync(tempOutput, overwrite: true, cancellationToken: cancellationToken);
-            logLine($"Upload end: {request.OutputBlobName}");
+            await logAndFlushAsync($"output upload completed: {request.OutputBlobName}");
 
-            logLine($"Delete message start: {message.MessageId}");
+            await logAndFlushAsync($"queue message delete started: {message.MessageId}");
             await DeleteMessageAsync(message, cancellationToken);
-            logLine($"Delete message end: {message.MessageId}");
-            logLine($"Completed transcode raw={request.RawBlobName} output={request.OutputBlobName}");
+            await logAndFlushAsync($"queue message delete completed: {message.MessageId}");
+            await logAndFlushAsync($"Completed transcode raw={request.RawBlobName} output={request.OutputBlobName}");
 
             await UploadDiagnosticLogAsync(executionLog, cancellationToken);
         }
@@ -171,6 +175,7 @@ public class Worker : BackgroundService
             _logger.LogError(ex, "Failed processing messageId={MessageId}", message.MessageId);
             executionLog.AppendLine($"[{DateTime.UtcNow:O}] Processing failed for messageId={message.MessageId}");
             executionLog.AppendLine(ex.ToString());
+            await logAndFlushAsync($"exception: {ex}");
             try
             {
                 await UploadDiagnosticLogAsync(executionLog, cancellationToken);
