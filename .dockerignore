@@ -1,0 +1,20 @@
+# Build outputs
+**/bin/
+**/obj/
+
+# Source control / local tooling
+.git/
+.gitignore
+.vs/
+.vscode/
+
+# Local artifacts and temp files
+.artifacts/
+**/*.user
+**/*.suo
+**/*.tmp
+**/*.log
+
+# OS junk
+**/.DS_Store
+**/Thumbs.db
