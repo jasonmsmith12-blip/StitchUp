@@ -33,29 +33,35 @@ public class Worker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Starting transcode worker.");
-        _logger.LogInformation(
-            "Loaded options: account={StorageAccount}, raw={RawContainer}, converted={ConvertedContainer}, queue={QueueName}",
-            _options.StorageAccount,
-            _options.RawContainer,
-            _options.ConvertedContainer,
-            _options.QueueName);
+        var executionLog = new StringBuilder();
+
+        void LogLine(string message)
+        {
+            var line = $"[{DateTime.UtcNow:O}] {message}";
+            executionLog.AppendLine(line);
+            _logger.LogInformation("{Message}", line);
+        }
+
+        LogLine("Worker start");
+        LogLine(
+            $"Loaded options account={_options.StorageAccount}, raw={_options.RawContainer}, converted={_options.ConvertedContainer}, queue={_options.QueueName}");
 
         try
         {
             await _queueClient.CreateIfNotExistsAsync(cancellationToken: stoppingToken);
+            LogLine($"Queue ready: {_queueClient.Name}");
         }
         catch (Exception ex)
         {
+            executionLog.AppendLine($"[{DateTime.UtcNow:O}] Queue init failed");
+            executionLog.AppendLine(ex.ToString());
             _logger.LogError(ex, "Queue init failed");
             throw;
         }
 
-        _logger.LogInformation("Queue ready: {QueueName}", _queueClient.Name);
-
         try
         {
-            _logger.LogInformation("Polling queue {Queue}", _queueClient.Name);
+            LogLine($"Polling queue {_queueClient.Name}");
             var response = await _queueClient.ReceiveMessagesAsync(
                 maxMessages: 1,
                 visibilityTimeout: MessageVisibilityTimeout,
@@ -64,32 +70,40 @@ public class Worker : BackgroundService
             var message = response.Value.FirstOrDefault();
             if (message is null)
             {
-                _logger.LogInformation("No queue messages available. Exiting.");
+                LogLine("No queue messages available. Exiting.");
                 return;
             }
 
-            _logger.LogInformation("Dequeued message id={MessageId}", message.MessageId);
-            await ProcessMessageAsync(message, stoppingToken);
+            LogLine($"Dequeue result: message found");
+            LogLine($"Message id: {message.MessageId}");
+            await ProcessMessageAsync(message, executionLog, LogLine, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
-            _logger.LogInformation("Cancellation requested. Exiting worker.");
+            LogLine("Cancellation requested. Exiting worker.");
         }
         catch (Exception ex)
         {
+            executionLog.AppendLine($"[{DateTime.UtcNow:O}] Unhandled worker exception");
+            executionLog.AppendLine(ex.ToString());
             _logger.LogError(ex, "Unhandled transcode loop error.");
             throw;
         }
 
-        _logger.LogInformation("Transcode worker stopped.");
+        LogLine("Transcode worker stopped.");
     }
 
-    private async Task ProcessMessageAsync(QueueMessage message, CancellationToken cancellationToken)
+    private async Task ProcessMessageAsync(
+        QueueMessage message,
+        StringBuilder executionLog,
+        Action<string> logLine,
+        CancellationToken cancellationToken)
     {
         var messageText = message.MessageText;
         if (!TryDeserializeMessage(messageText, out var request))
         {
             _logger.LogWarning("Invalid queue message JSON. Deleting messageId={MessageId}", message.MessageId);
+            logLine($"Invalid queue message JSON. Deleting messageId={message.MessageId}");
             await DeleteMessageAsync(message, cancellationToken);
             return;
         }
@@ -99,35 +113,50 @@ public class Worker : BackgroundService
             _logger.LogWarning(
                 "Queue message missing required fields rawBlobName/outputBlobName. Deleting messageId={MessageId}",
                 message.MessageId);
+            logLine($"Queue message missing required fields. Deleting messageId={message.MessageId}");
             await DeleteMessageAsync(message, cancellationToken);
             return;
         }
+
+        logLine($"rawBlobName: {request.RawBlobName}");
+        logLine($"outputBlobName: {request.OutputBlobName}");
 
         var tempInput = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}{Path.GetExtension(request.RawBlobName)}");
         var tempOutput = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.mp4");
 
         try
         {
-            _logger.LogInformation(
-                "Processing blobs. rawBlobName={RawBlobName}, outputBlobName={OutputBlobName}",
-                request.RawBlobName,
-                request.OutputBlobName);
+            logLine($"Raw blob download start: {request.RawBlobName}");
 
-            _logger.LogInformation("Downloading raw blob: {BlobName}", request.RawBlobName);
             var rawBlobClient = _rawContainer.GetBlobClient(request.RawBlobName);
             await rawBlobClient.DownloadToAsync(tempInput, cancellationToken);
-            _logger.LogInformation("Download complete: {BlobName}", request.RawBlobName);
+            logLine($"Raw blob download end: {request.RawBlobName}");
 
-            _logger.LogInformation("Running ffmpeg for {BlobName}", request.RawBlobName);
-            await RunFfmpegAsync(tempInput, tempOutput, cancellationToken);
+            logLine($"ffmpeg command start: ffmpeg -y -i \"{tempInput}\" -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k \"{tempOutput}\"");
+            var ffmpegResult = await RunFfmpegAsync(tempInput, tempOutput, cancellationToken);
+            logLine($"ffmpeg exit code: {ffmpegResult.ExitCode}");
 
-            _logger.LogInformation("Uploading converted blob: {BlobName}", request.OutputBlobName);
+            if (!string.IsNullOrWhiteSpace(ffmpegResult.StandardOutput))
+            {
+                logLine($"ffmpeg stdout: {ffmpegResult.StandardOutput}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(ffmpegResult.StandardError))
+            {
+                logLine($"ffmpeg stderr: {ffmpegResult.StandardError}");
+            }
+
+            logLine($"Upload start: {request.OutputBlobName}");
             var outputBlobClient = _convertedContainer.GetBlobClient(request.OutputBlobName);
             await outputBlobClient.UploadAsync(tempOutput, overwrite: true, cancellationToken: cancellationToken);
-            _logger.LogInformation("Upload complete: {BlobName}", request.OutputBlobName);
+            logLine($"Upload end: {request.OutputBlobName}");
 
+            logLine($"Delete message start: {message.MessageId}");
             await DeleteMessageAsync(message, cancellationToken);
-            _logger.LogInformation("Completed transcode. raw={RawBlob} output={OutputBlob}", request.RawBlobName, request.OutputBlobName);
+            logLine($"Delete message end: {message.MessageId}");
+            logLine($"Completed transcode raw={request.RawBlobName} output={request.OutputBlobName}");
+
+            await UploadDiagnosticLogAsync(executionLog, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -137,6 +166,18 @@ public class Worker : BackgroundService
         {
             // Message remains in queue and becomes visible again after visibility timeout.
             _logger.LogError(ex, "Failed processing messageId={MessageId}", message.MessageId);
+            executionLog.AppendLine($"[{DateTime.UtcNow:O}] Processing failed for messageId={message.MessageId}");
+            executionLog.AppendLine(ex.ToString());
+            try
+            {
+                await UploadDiagnosticLogAsync(executionLog, cancellationToken);
+            }
+            catch (Exception uploadEx)
+            {
+                _logger.LogError(uploadEx, "Failed to upload diagnostics log blob.");
+            }
+
+            throw;
         }
         finally
         {
@@ -172,7 +213,7 @@ public class Worker : BackgroundService
         }
     }
 
-    private async Task RunFfmpegAsync(string inputPath, string outputPath, CancellationToken cancellationToken)
+    private async Task<FfmpegResult> RunFfmpegAsync(string inputPath, string outputPath, CancellationToken cancellationToken)
     {
         using var process = new Process();
         process.StartInfo.FileName = "ffmpeg";
@@ -204,16 +245,15 @@ public class Worker : BackgroundService
         }
 
         _logger.LogInformation("ffmpeg completed successfully. ExitCode={ExitCode}", process.ExitCode);
+        return new FfmpegResult(process.ExitCode, stdout, stderr);
+    }
 
-        if (!string.IsNullOrWhiteSpace(stdout))
-        {
-            _logger.LogDebug("ffmpeg stdout: {Output}", stdout);
-        }
-
-        if (!string.IsNullOrWhiteSpace(stderr))
-        {
-            _logger.LogDebug("ffmpeg stderr: {Output}", stderr);
-        }
+    private async Task UploadDiagnosticLogAsync(StringBuilder executionLog, CancellationToken cancellationToken)
+    {
+        var logBlob = _convertedContainer.GetBlobClient("diagnostics/last-worker-log.txt");
+        await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(executionLog.ToString()));
+        await logBlob.UploadAsync(stream, overwrite: true, cancellationToken: cancellationToken);
+        _logger.LogInformation("Uploaded diagnostic execution log to diagnostics/last-worker-log.txt");
     }
 
     private async Task DeleteMessageAsync(QueueMessage message, CancellationToken cancellationToken)
@@ -236,6 +276,8 @@ public class Worker : BackgroundService
         }
     }
 }
+
+public sealed record FfmpegResult(int ExitCode, string StandardOutput, string StandardError);
 
 public sealed class TranscodeRequestMessage
 {
