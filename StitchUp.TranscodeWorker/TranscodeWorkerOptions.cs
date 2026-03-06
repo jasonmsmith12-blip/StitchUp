@@ -17,28 +17,31 @@ public sealed class TranscodeWorkerOptions
 
     public static TranscodeWorkerOptions LoadFromEnvironment()
     {
-        var storageAccount = Required(StorageAccountKey);
-        var rawContainer = Required(RawContainerKey);
-        var convertedContainer = Required(ConvertedContainerKey);
-        var queueName = Required(QueueNameKey);
-
-        return new TranscodeWorkerOptions
+        var options = new TranscodeWorkerOptions
         {
-            StorageAccount = storageAccount,
-            RawContainer = rawContainer,
-            ConvertedContainer = convertedContainer,
-            QueueName = queueName
+            StorageAccount = Environment.GetEnvironmentVariable(StorageAccountKey)?.Trim() ?? string.Empty,
+            RawContainer = Environment.GetEnvironmentVariable(RawContainerKey)?.Trim() ?? string.Empty,
+            ConvertedContainer = Environment.GetEnvironmentVariable(ConvertedContainerKey)?.Trim() ?? string.Empty,
+            QueueName = Environment.GetEnvironmentVariable(QueueNameKey)?.Trim() ?? string.Empty
         };
+
+        options.Validate();
+        return options;
     }
 
-    private static string Required(string key)
+    public void Validate()
     {
-        var value = Environment.GetEnvironmentVariable(key);
+        RequireNotEmpty(StorageAccount, StorageAccountKey);
+        RequireNotEmpty(RawContainer, RawContainerKey);
+        RequireNotEmpty(ConvertedContainer, ConvertedContainerKey);
+        RequireNotEmpty(QueueName, QueueNameKey);
+    }
+
+    private static void RequireNotEmpty(string? value, string key)
+    {
         if (string.IsNullOrWhiteSpace(value))
         {
             throw new InvalidOperationException($"Missing required environment variable: {key}");
         }
-
-        return value.Trim();
     }
 }

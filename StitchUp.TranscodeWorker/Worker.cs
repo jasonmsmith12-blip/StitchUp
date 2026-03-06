@@ -10,22 +10,23 @@ namespace StitchUp.TranscodeWorker;
 public class Worker : BackgroundService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private static readonly TimeSpan PollDelay = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan MessageVisibilityTimeout = TimeSpan.FromMinutes(5);
 
     private readonly ILogger<Worker> _logger;
     private readonly QueueClient _queueClient;
     private readonly BlobContainerClient _rawContainer;
     private readonly BlobContainerClient _convertedContainer;
+    private readonly TranscodeWorkerOptions _options;
 
     public Worker(
         ILogger<Worker> logger,
-        QueueClient queueClient,
+        QueueServiceClient queueServiceClient,
         BlobServiceClient blobServiceClient,
         TranscodeWorkerOptions options)
     {
         _logger = logger;
-        _queueClient = queueClient;
+        _options = options;
+        _queueClient = queueServiceClient.GetQueueClient(options.QueueName);
         _rawContainer = blobServiceClient.GetBlobContainerClient(options.RawContainer);
         _convertedContainer = blobServiceClient.GetBlobContainerClient(options.ConvertedContainer);
     }
@@ -33,6 +34,13 @@ public class Worker : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Starting transcode worker.");
+        _logger.LogInformation(
+            "Loaded options: account={StorageAccount}, raw={RawContainer}, converted={ConvertedContainer}, queue={QueueName}",
+            _options.StorageAccount,
+            _options.RawContainer,
+            _options.ConvertedContainer,
+            _options.QueueName);
+
         try
         {
             await _queueClient.CreateIfNotExistsAsync(cancellationToken: stoppingToken);
@@ -45,34 +53,32 @@ public class Worker : BackgroundService
 
         _logger.LogInformation("Queue ready: {QueueName}", _queueClient.Name);
 
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            try
-            {
-                _logger.LogInformation("Polling queue {Queue}", _queueClient.Name);
-                var response = await _queueClient.ReceiveMessagesAsync(
-                    maxMessages: 1,
-                    visibilityTimeout: MessageVisibilityTimeout,
-                    cancellationToken: stoppingToken);
+            _logger.LogInformation("Polling queue {Queue}", _queueClient.Name);
+            var response = await _queueClient.ReceiveMessagesAsync(
+                maxMessages: 1,
+                visibilityTimeout: MessageVisibilityTimeout,
+                cancellationToken: stoppingToken);
 
-                var message = response.Value.FirstOrDefault();
-                if (message is null)
-                {
-                    await Task.Delay(PollDelay, stoppingToken);
-                    continue;
-                }
+            var message = response.Value.FirstOrDefault();
+            if (message is null)
+            {
+                _logger.LogInformation("No queue messages available. Exiting.");
+                return;
+            }
 
-                await ProcessMessageAsync(message, stoppingToken);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unhandled transcode loop error.");
-                throw;
-            }
+            _logger.LogInformation("Dequeued message id={MessageId}", message.MessageId);
+            await ProcessMessageAsync(message, stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("Cancellation requested. Exiting worker.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unhandled transcode loop error.");
+            throw;
         }
 
         _logger.LogInformation("Transcode worker stopped.");
@@ -102,9 +108,15 @@ public class Worker : BackgroundService
 
         try
         {
+            _logger.LogInformation(
+                "Processing blobs. rawBlobName={RawBlobName}, outputBlobName={OutputBlobName}",
+                request.RawBlobName,
+                request.OutputBlobName);
+
             _logger.LogInformation("Downloading raw blob: {BlobName}", request.RawBlobName);
             var rawBlobClient = _rawContainer.GetBlobClient(request.RawBlobName);
             await rawBlobClient.DownloadToAsync(tempInput, cancellationToken);
+            _logger.LogInformation("Download complete: {BlobName}", request.RawBlobName);
 
             _logger.LogInformation("Running ffmpeg for {BlobName}", request.RawBlobName);
             await RunFfmpegAsync(tempInput, tempOutput, cancellationToken);
@@ -112,6 +124,7 @@ public class Worker : BackgroundService
             _logger.LogInformation("Uploading converted blob: {BlobName}", request.OutputBlobName);
             var outputBlobClient = _convertedContainer.GetBlobClient(request.OutputBlobName);
             await outputBlobClient.UploadAsync(tempOutput, overwrite: true, cancellationToken: cancellationToken);
+            _logger.LogInformation("Upload complete: {BlobName}", request.OutputBlobName);
 
             await DeleteMessageAsync(message, cancellationToken);
             _logger.LogInformation("Completed transcode. raw={RawBlob} output={OutputBlob}", request.RawBlobName, request.OutputBlobName);
@@ -183,8 +196,14 @@ public class Worker : BackgroundService
 
         if (process.ExitCode != 0)
         {
+            _logger.LogError(
+                "ffmpeg failed. ExitCode={ExitCode}, stderr={StdErr}",
+                process.ExitCode,
+                stderr);
             throw new InvalidOperationException($"ffmpeg failed with exit code {process.ExitCode}. stderr: {stderr}");
         }
+
+        _logger.LogInformation("ffmpeg completed successfully. ExitCode={ExitCode}", process.ExitCode);
 
         if (!string.IsNullOrWhiteSpace(stdout))
         {

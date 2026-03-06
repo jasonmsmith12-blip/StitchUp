@@ -20,8 +20,8 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddSingleton(sp =>
 {
     var credential = sp.GetRequiredService<TokenCredential>();
-    return new QueueClient(
-        new Uri($"https://{options.StorageAccount}.queue.core.windows.net/{options.QueueName}"),
+    return new QueueServiceClient(
+        new Uri($"https://{options.StorageAccount}.queue.core.windows.net"),
         credential);
 });
 builder.Services.AddHostedService<Worker>();
