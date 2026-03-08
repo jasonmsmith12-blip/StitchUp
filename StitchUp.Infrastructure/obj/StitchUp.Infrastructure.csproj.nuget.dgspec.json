@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Infrastructure\\StitchUp.Infrastructure.csproj": {}
+    "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Infrastructure\\StitchUp.Infrastructure.csproj": {}
   },
   "projects": {
-    "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain\\StitchUp.Domain.csproj": {
+    "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain\\StitchUp.Domain.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain\\StitchUp.Domain.csproj",
+        "projectUniqueName": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain\\StitchUp.Domain.csproj",
         "projectName": "StitchUp.Domain",
-        "projectPath": "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain\\StitchUp.Domain.csproj",
+        "projectPath": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain\\StitchUp.Domain.csproj",
         "packagesPath": "C:\\Users\\jason\\.nuget\\packages\\",
-        "outputPath": "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain\\obj\\",
+        "outputPath": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -344,14 +344,14 @@
         }
       }
     },
-    "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Infrastructure\\StitchUp.Infrastructure.csproj": {
+    "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Infrastructure\\StitchUp.Infrastructure.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Infrastructure\\StitchUp.Infrastructure.csproj",
+        "projectUniqueName": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Infrastructure\\StitchUp.Infrastructure.csproj",
         "projectName": "StitchUp.Infrastructure",
-        "projectPath": "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Infrastructure\\StitchUp.Infrastructure.csproj",
+        "projectPath": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Infrastructure\\StitchUp.Infrastructure.csproj",
         "packagesPath": "C:\\Users\\jason\\.nuget\\packages\\",
-        "outputPath": "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Infrastructure\\obj\\",
+        "outputPath": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Infrastructure\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -373,8 +373,8 @@
           "net10.0": {
             "targetAlias": "net10.0",
             "projectReferences": {
-              "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain\\StitchUp.Domain.csproj": {
-                "projectPath": "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain\\StitchUp.Domain.csproj"
+              "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain\\StitchUp.Domain.csproj": {
+                "projectPath": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain\\StitchUp.Domain.csproj"
               }
             }
           }

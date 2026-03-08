@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("StitchUp.Domain")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+12a4009c22ff2a9e87376114c5390d5f711638d9")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0863367ed5d28fc923f92ae2212840759d7cf7d2")]
 [assembly: System.Reflection.AssemblyProductAttribute("StitchUp.Domain")]
 [assembly: System.Reflection.AssemblyTitleAttribute("StitchUp.Domain")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

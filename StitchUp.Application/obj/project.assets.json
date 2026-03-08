@@ -49,11 +49,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Application\\StitchUp.Application.csproj",
+      "projectUniqueName": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Application\\StitchUp.Application.csproj",
       "projectName": "StitchUp.Application",
-      "projectPath": "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Application\\StitchUp.Application.csproj",
+      "projectPath": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Application\\StitchUp.Application.csproj",
       "packagesPath": "C:\\Users\\jason\\.nuget\\packages\\",
-      "outputPath": "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Application\\obj\\",
+      "outputPath": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Application\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -75,11 +75,11 @@
         "net10.0": {
           "targetAlias": "net10.0",
           "projectReferences": {
-            "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Contracts\\StitchUp.Contracts.csproj": {
-              "projectPath": "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Contracts\\StitchUp.Contracts.csproj"
+            "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Contracts\\StitchUp.Contracts.csproj": {
+              "projectPath": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Contracts\\StitchUp.Contracts.csproj"
             },
-            "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain\\StitchUp.Domain.csproj": {
-              "projectPath": "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain\\StitchUp.Domain.csproj"
+            "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain\\StitchUp.Domain.csproj": {
+              "projectPath": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Domain\\StitchUp.Domain.csproj"
             }
           }
         }
