@@ -155,3 +155,4 @@ C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\Stitc
 C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\StitchUp.Contracts.pdb
 C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\StitchUp.Infrastructure.pdb
 C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\StitchUp.Domain.pdb
+C:\source\StichUp\StitchUp.Backend\StitchUp.Api\obj\Debug\net10.0\StitchUp.Api.sourcelink.json

@@ -15,3 +15,4 @@ C:\source\StichUp\StitchUp.Backend\.artifacts\api-build-check\StitchUp.Domain.pd
 C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\StitchUp.Domain.deps.json
 C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\StitchUp.Domain.dll
 C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\StitchUp.Domain.pdb
+C:\source\StichUp\StitchUp.Backend\StitchUp.Domain\obj\Debug\net10.0\StitchUp.Domain.sourcelink.json

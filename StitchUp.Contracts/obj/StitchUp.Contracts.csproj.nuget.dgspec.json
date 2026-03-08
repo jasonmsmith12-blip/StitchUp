@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Contracts\\StitchUp.Contracts.csproj": {}
+    "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Contracts\\StitchUp.Contracts.csproj": {}
   },
   "projects": {
-    "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Contracts\\StitchUp.Contracts.csproj": {
+    "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Contracts\\StitchUp.Contracts.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Contracts\\StitchUp.Contracts.csproj",
+        "projectUniqueName": "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Contracts\\StitchUp.Contracts.csproj",
         "projectName": "StitchUp.Contracts",
-        "projectPath": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Contracts\\StitchUp.Contracts.csproj",
+        "projectPath": "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Contracts\\StitchUp.Contracts.csproj",
         "packagesPath": "C:\\Users\\jason\\.nuget\\packages\\",
-        "outputPath": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Contracts\\obj\\",
+        "outputPath": "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Contracts\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

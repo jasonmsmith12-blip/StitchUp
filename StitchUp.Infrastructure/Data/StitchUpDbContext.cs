@@ -20,6 +20,12 @@ public class StitchUpDbContext : DbContext
 
     public DbSet<MediaConversionAttemptEntity> MediaConversionAttempts => Set<MediaConversionAttemptEntity>();
 
+    public DbSet<MediaBlobEntity> MediaBlobs => Set<MediaBlobEntity>();
+
+    public DbSet<ProjectManifestVersionEntity> ProjectManifestVersions => Set<ProjectManifestVersionEntity>();
+
+    public DbSet<ProjectChangeProposalEntity> ProjectChangeProposals => Set<ProjectChangeProposalEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("dbo");
@@ -52,6 +58,12 @@ public class StitchUpDbContext : DbContext
             entity.HasOne(x => x.AuthorUser)
                 .WithMany(x => x.Projects)
                 .HasForeignKey(x => x.AuthorUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.CurrentPublishedManifestVersion)
+                .WithMany()
+                .HasForeignKey(x => new { x.ProjectId, x.CurrentPublishedVersionNumber })
+                .HasPrincipalKey(x => new { x.ProjectId, x.VersionNumber })
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -86,10 +98,58 @@ public class StitchUpDbContext : DbContext
             entity.Property(x => x.CloudConversionError)
                 .HasMaxLength(1024);
 
+            entity.Property(x => x.CanonicalBlobPath)
+                .HasMaxLength(500);
+
+            entity.Property(x => x.CanonicalContainer)
+                .HasMaxLength(100);
+
+            entity.Property(x => x.StorageState)
+                .IsRequired()
+                .HasMaxLength(32)
+                .HasDefaultValue("LocalOnly");
+
+            entity.Property(x => x.IsTemporary)
+                .IsRequired()
+                .HasDefaultValue(false);
+
             entity.HasOne(x => x.AuthorUser)
                 .WithMany(x => x.Media)
                 .HasForeignKey(x => x.AuthorUserId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<MediaBlobEntity>(entity =>
+        {
+            entity.ToTable("MediaBlob");
+            entity.HasKey(x => x.MediaBlobId);
+
+            entity.Property(x => x.MediaBlobId)
+                .HasDefaultValueSql("NEWID()");
+
+            entity.Property(x => x.BlobRole)
+                .IsRequired()
+                .HasMaxLength(32);
+
+            entity.Property(x => x.ContainerName)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.Property(x => x.BlobPath)
+                .IsRequired()
+                .HasMaxLength(500);
+
+            entity.Property(x => x.IsTemporary)
+                .IsRequired()
+                .HasDefaultValue(false);
+
+            entity.Property(x => x.CreatedUtc)
+                .HasDefaultValueSql("SYSUTCDATETIME()");
+
+            entity.HasOne(x => x.Media)
+                .WithMany(x => x.MediaBlobs)
+                .HasForeignKey(x => x.MediaId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<MediaConversionAttemptEntity>(entity =>
@@ -142,6 +202,87 @@ public class StitchUpDbContext : DbContext
                 .WithMany(x => x.ProjectMedia)
                 .HasForeignKey(x => x.MediaId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ProjectManifestVersionEntity>(entity =>
+        {
+            entity.ToTable("ProjectManifestVersion");
+            entity.HasKey(x => x.ProjectManifestVersionId);
+
+            entity.Property(x => x.ProjectManifestVersionId)
+                .HasDefaultValueSql("NEWID()");
+
+            entity.Property(x => x.CreatedUtc)
+                .HasDefaultValueSql("SYSUTCDATETIME()");
+
+            entity.Property(x => x.ManifestJson)
+                .IsRequired();
+
+            entity.Property(x => x.ChangeSummary)
+                .HasMaxLength(1000);
+
+            entity.Property(x => x.IsPublished)
+                .IsRequired()
+                .HasDefaultValue(false);
+
+            entity.HasIndex(x => new { x.ProjectId, x.VersionNumber })
+                .IsUnique();
+
+            entity.HasIndex(x => x.ProjectId)
+                .IsUnique()
+                .HasFilter("[IsPublished] = 1");
+
+            entity.HasOne(x => x.Project)
+                .WithMany(x => x.ManifestVersions)
+                .HasForeignKey(x => x.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.CreatedByUser)
+                .WithMany(x => x.ProjectManifestVersions)
+                .HasForeignKey(x => x.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ProjectChangeProposalEntity>(entity =>
+        {
+            entity.ToTable("ProjectChangeProposal");
+            entity.HasKey(x => x.ProjectChangeProposalId);
+
+            entity.Property(x => x.ProjectChangeProposalId)
+                .HasDefaultValueSql("NEWID()");
+
+            entity.Property(x => x.Status)
+                .IsRequired()
+                .HasMaxLength(32);
+
+            entity.Property(x => x.ChangeSummary)
+                .HasMaxLength(1000);
+
+            entity.Property(x => x.CreatedUtc)
+                .HasDefaultValueSql("SYSUTCDATETIME()");
+
+            entity.HasIndex(x => new { x.ProjectId, x.ProposedVersionNumber })
+                .IsUnique();
+
+            entity.HasOne(x => x.Project)
+                .WithMany(x => x.ChangeProposals)
+                .HasForeignKey(x => x.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.ProposedByUser)
+                .WithMany(x => x.ProjectChangeProposals)
+                .HasForeignKey(x => x.ProposedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.ReviewedByUser)
+                .WithMany(x => x.ReviewedProjectChangeProposals)
+                .HasForeignKey(x => x.ReviewedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.ProjectManifestVersion)
+                .WithMany(x => x.ChangeProposals)
+                .HasForeignKey(x => x.ProjectManifestVersionId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

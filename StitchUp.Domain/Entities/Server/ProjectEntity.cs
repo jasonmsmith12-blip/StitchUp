@@ -6,6 +6,8 @@ public class ProjectEntity
 
     public Guid AuthorUserId { get; set; }
 
+    public int? CurrentPublishedVersionNumber { get; set; }
+
     public string Title { get; set; } = string.Empty;
 
     public string? Description { get; set; }
@@ -16,5 +18,11 @@ public class ProjectEntity
 
     public UserEntity AuthorUser { get; set; } = null!;
 
+    public ProjectManifestVersionEntity? CurrentPublishedManifestVersion { get; set; }
+
     public ICollection<ProjectMediaEntity> ProjectMedia { get; set; } = new List<ProjectMediaEntity>();
+
+    public ICollection<ProjectManifestVersionEntity> ManifestVersions { get; set; } = new List<ProjectManifestVersionEntity>();
+
+    public ICollection<ProjectChangeProposalEntity> ChangeProposals { get; set; } = new List<ProjectChangeProposalEntity>();
 }

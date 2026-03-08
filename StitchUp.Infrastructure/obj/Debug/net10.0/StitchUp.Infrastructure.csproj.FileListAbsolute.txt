@@ -23,3 +23,4 @@ C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\Stitc
 C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\StitchUp.Infrastructure.runtimeconfig.json
 C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\StitchUp.Infrastructure.dll
 C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\StitchUp.Infrastructure.pdb
+C:\source\StichUp\StitchUp.Backend\StitchUp.Infrastructure\obj\Debug\net10.0\StitchUp.Infrastructure.sourcelink.json

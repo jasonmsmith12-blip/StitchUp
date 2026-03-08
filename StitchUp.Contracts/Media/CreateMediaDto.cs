@@ -11,4 +11,10 @@ public class CreateMediaDto
     public string? Description { get; set; }
 
     public string BlobPath { get; set; } = string.Empty;
+
+    public string? OriginalBlobPath { get; set; }
+
+    public bool WasCloudConverted { get; set; }
+
+    public string? CloudConversionStatus { get; set; }
 }

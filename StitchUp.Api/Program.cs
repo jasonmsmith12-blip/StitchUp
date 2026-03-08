@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using StitchUp.Api.Auth;
 using StitchUp.Api.Extensions;
 using StitchUp.Api.Middleware;
+using StitchUp.Api.Services;
 using StitchUp.Api.Startup;
 using StitchUp.Contracts.Feed;
 using StitchUp.Contracts.Media;
@@ -24,6 +25,8 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HeaderCurrentUser>();
 builder.Services.AddScoped<ICurrentUserAccessor, CurrentUserAccessor>();
+builder.Services.AddScoped<IMediaCanonicalService, MediaCanonicalService>();
+builder.Services.AddScoped<IProjectManifestService, ProjectManifestService>();
 
 var stitchUpSqlConnectionString = builder.Configuration.GetConnectionString("StitchUpSql")
     ?? throw new InvalidOperationException("Missing connection string: ConnectionStrings:StitchUpSql");
@@ -198,6 +201,7 @@ app.MapPost("/api/media", async (CreateMediaDto request, HttpContext httpContext
         return Results.BadRequest("Current user does not exist.");
     }
 
+    var now = DateTime.UtcNow;
     var media = new MediaEntity
     {
         MediaId = request.MediaId,
@@ -206,10 +210,15 @@ app.MapPost("/api/media", async (CreateMediaDto request, HttpContext httpContext
         Title = request.Title,
         Description = request.Description,
         BlobPath = request.BlobPath,
-        CreatedUtc = DateTime.UtcNow
+        OriginalBlobPath = request.OriginalBlobPath,
+        WasCloudConverted = request.WasCloudConverted,
+        CloudConversionStatus = request.CloudConversionStatus ?? "NotRequested",
+        CreatedUtc = now
     };
 
+    ApplyCanonicalStorageState(media, now);
     db.Media.Add(media);
+    AddMediaBlobRows(db, media, now);
     await db.SaveChangesAsync(ct);
 
     return Results.Created($"/api/media/{media.MediaId}", new { mediaId = media.MediaId });
@@ -387,7 +396,7 @@ app.MapPost("/api/media/read-sas/batch", async (ReadSasBatchRequestDto request, 
     return Results.Ok(responses);
 });
 
-app.MapPost("/api/projects/{projectId:guid}/clips", async (Guid projectId, CreateProjectMediaDto request, HttpContext httpContext, StitchUpDbContext db, CancellationToken ct) =>
+app.MapPost("/api/projects/{projectId:guid}/clips", async (Guid projectId, CreateProjectMediaDto request, HttpContext httpContext, StitchUpDbContext db, IMediaCanonicalService canonicalService, CancellationToken ct) =>
 {
     var currentUserId = httpContext.GetCurrentUserId();
 
@@ -410,6 +419,30 @@ app.MapPost("/api/projects/{projectId:guid}/clips", async (Guid projectId, Creat
         return Results.Forbid();
     }
 
+    var media = await db.Media
+        .AsNoTracking()
+        .FirstOrDefaultAsync(x => x.MediaId == request.MediaId, ct);
+
+    if (media is null)
+    {
+        return Results.NotFound("Media not found.");
+    }
+
+    if (media.AuthorUserId != currentUserId)
+    {
+        return Results.Forbid();
+    }
+
+    if (string.Equals(media.StorageState, "CloudTempConverted", StringComparison.OrdinalIgnoreCase) &&
+        !string.IsNullOrWhiteSpace(media.CanonicalBlobPath))
+    {
+        await canonicalService.PromoteMediaToCanonicalAsync(request.MediaId, ct);
+    }
+    else if (string.Equals(media.StorageState, "CloudCanonical", StringComparison.OrdinalIgnoreCase))
+    {
+        // Already canonical; no-op by design.
+    }
+
     var clip = new ProjectMediaEntity
     {
         ProjectMediaId = Guid.NewGuid(),
@@ -425,6 +458,117 @@ app.MapPost("/api/projects/{projectId:guid}/clips", async (Guid projectId, Creat
     await db.SaveChangesAsync(ct);
 
     return Results.Created($"/api/projects/{projectId}/clips/{clip.ProjectMediaId}", new { projectMediaId = clip.ProjectMediaId });
+});
+
+app.MapPost("/api/media/{mediaId:guid}/promote-canonical", async (Guid mediaId, HttpContext httpContext, StitchUpDbContext db, IMediaCanonicalService canonicalService, CancellationToken ct) =>
+{
+    var currentUserId = httpContext.GetCurrentUserId();
+    var media = await db.Media
+        .AsNoTracking()
+        .FirstOrDefaultAsync(x => x.MediaId == mediaId, ct);
+
+    if (media is null)
+    {
+        return Results.NotFound("Media not found.");
+    }
+
+    if (media.AuthorUserId != currentUserId)
+    {
+        return Results.Forbid();
+    }
+
+    try
+    {
+        var response = await canonicalService.PromoteMediaToCanonicalAsync(mediaId, ct);
+        return Results.Ok(response);
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+});
+
+app.MapPost("/api/media/{mediaId:guid}/complete-cloud-conversion", async (Guid mediaId, CompleteCloudConversionRequestDto request, HttpContext httpContext, StitchUpDbContext db, CancellationToken ct) =>
+{
+    var currentUserId = httpContext.GetCurrentUserId();
+    var media = await db.Media
+        .FirstOrDefaultAsync(x => x.MediaId == mediaId, ct);
+
+    if (media is null)
+    {
+        return Results.NotFound("Media not found.");
+    }
+
+    if (media.AuthorUserId != currentUserId)
+    {
+        return Results.Forbid();
+    }
+
+    if (string.IsNullOrWhiteSpace(request.ConvertedBlobPath))
+    {
+        return Results.BadRequest("convertedBlobPath is required.");
+    }
+
+    var convertedContainer = string.IsNullOrWhiteSpace(request.ConvertedContainer)
+        ? "stitchup-media-converted"
+        : request.ConvertedContainer.Trim();
+    const string rawContainer = "stitchup-media-raw";
+    var utcNow = DateTime.UtcNow;
+    var previousBlobPath = media.BlobPath?.Trim();
+    var rawBlobPath = string.IsNullOrWhiteSpace(media.OriginalBlobPath)
+        ? previousBlobPath
+        : media.OriginalBlobPath.Trim();
+    if (!string.IsNullOrWhiteSpace(rawBlobPath))
+    {
+        media.OriginalBlobPath = rawBlobPath;
+    }
+
+    media.BlobPath = request.ConvertedBlobPath.Trim();
+    media.WasCloudConverted = true;
+    media.CloudConversionStatus = "CloudTempConverted";
+    media.CloudConvertedUtc = utcNow;
+    media.CanonicalBlobPath = media.BlobPath;
+    media.CanonicalContainer = convertedContainer;
+    media.StorageState = "CloudTempConverted";
+    media.IsTemporary = true;
+    media.TemporaryExpiresUtc = utcNow.AddDays(7);
+
+    if (!string.IsNullOrWhiteSpace(rawBlobPath))
+    {
+        await UpsertMediaBlobAsync(
+            db,
+            media.MediaId,
+            blobRole: "Raw",
+            containerName: rawContainer,
+            blobPath: rawBlobPath,
+            isTemporary: true,
+            temporaryExpiresUtc: media.TemporaryExpiresUtc,
+            utcNow,
+            ct);
+    }
+
+    await UpsertMediaBlobAsync(
+        db,
+        media.MediaId,
+        blobRole: "Converted",
+        containerName: convertedContainer,
+        blobPath: media.BlobPath,
+        isTemporary: true,
+        temporaryExpiresUtc: media.TemporaryExpiresUtc,
+        utcNow,
+        ct);
+
+    await db.SaveChangesAsync(ct);
+
+    return Results.Ok(new CompleteCloudConversionResponseDto
+    {
+        MediaId = media.MediaId,
+        ConvertedBlobPath = media.CanonicalBlobPath ?? string.Empty,
+        ConvertedContainer = media.CanonicalContainer ?? convertedContainer,
+        StorageState = media.StorageState,
+        IsTemporary = media.IsTemporary,
+        TemporaryExpiresUtc = media.TemporaryExpiresUtc
+    });
 });
 
 async Task<IResult> MapFeedProjects(HttpContext httpContext, BlobServiceClient blobServiceClient, IOptions<AzureStorageSettings> storageOptions, StitchUpDbContext db, ILogger<Program> logger, CancellationToken ct)
@@ -505,7 +649,11 @@ async Task<IResult> MapFeedProjects(HttpContext httpContext, BlobServiceClient b
                         BlobPath = blobPath,
                         ReadUrl = blobClient.GenerateSasUri(readSasBuilder).ToString(),
                         WasCloudConverted = clip.Media?.WasCloudConverted ?? false,
-                        CloudConversionStatus = clip.Media?.CloudConversionStatus ?? string.Empty
+                        CloudConversionStatus = clip.Media?.CloudConversionStatus ?? string.Empty,
+                        CanonicalBlobPath = clip.Media?.CanonicalBlobPath,
+                        CanonicalContainer = clip.Media?.CanonicalContainer,
+                        StorageState = clip.Media?.StorageState ?? string.Empty,
+                        IsTemporary = clip.Media?.IsTemporary ?? false
                     };
                 })
                 .ToList()
@@ -554,6 +702,12 @@ app.MapGet("/api/projects/{projectId:guid}/clips", async (Guid projectId, Stitch
             Title = pm.Media.Title,
             Description = pm.Media.Description,
             BlobPath = pm.Media.BlobPath,
+            WasCloudConverted = pm.Media.WasCloudConverted,
+            CloudConversionStatus = pm.Media.CloudConversionStatus,
+            CanonicalBlobPath = pm.Media.CanonicalBlobPath,
+            CanonicalContainer = pm.Media.CanonicalContainer,
+            StorageState = pm.Media.StorageState,
+            IsTemporary = pm.Media.IsTemporary,
             CreatedUtc = pm.Media.CreatedUtc
         })
         .ToListAsync(ct);
@@ -561,7 +715,272 @@ app.MapGet("/api/projects/{projectId:guid}/clips", async (Guid projectId, Stitch
     return Results.Ok(clips);
 });
 
+app.MapGet("/api/projects/{projectId:guid}/manifest", GetCurrentManifestAsync);
+app.MapGet("/api/projects/{projectId:guid}/manifest/current", GetCurrentManifestAsync);
+app.MapGet("/api/projects/{projectId:guid}/manifest/versions", GetManifestVersionsAsync);
+
+app.MapPost("/api/projects/{projectId:guid}/manifest", SaveManifestAsync);
+app.MapPost("/api/projects/{projectId:guid}/manifest/save", SaveManifestAsync);
+
+app.MapGet("/api/projects/{projectId:guid}/manifest/diff", GetManifestDiffAsync);
+
+app.MapPost("/api/projects/{projectId:guid}/manifest/{version:int}/publish", PublishManifestAsync);
+app.MapPost("/api/projects/{projectId:guid}/manifest/versions/{version:int}/publish", PublishManifestAsync);
+
+app.MapGet("/api/projects/{projectId:guid}/proposals", GetPendingProposalsAsync);
+app.MapPost("/api/projects/{projectId:guid}/proposals/{version:int}/accept", AcceptProposalAsync);
+app.MapPost("/api/projects/{projectId:guid}/proposals/{version:int}/reject", RejectProposalAsync);
+
 app.Run();
+
+static async Task<IResult> GetCurrentManifestAsync(
+    Guid projectId,
+    StitchUpDbContext db,
+    IProjectManifestService manifestService,
+    CancellationToken ct)
+{
+    var projectExists = await db.Projects
+        .AsNoTracking()
+        .AnyAsync(x => x.ProjectId == projectId, ct);
+    if (!projectExists)
+    {
+        return Results.NotFound();
+    }
+
+    var manifest = await manifestService.GetLatestManifestAsync(projectId, ct);
+    return manifest is null ? Results.NotFound() : Results.Ok(manifest);
+}
+
+static async Task<IResult> SaveManifestAsync(
+    Guid projectId,
+    SaveProjectManifestRequestDto request,
+    HttpContext httpContext,
+    StitchUpDbContext db,
+    IProjectManifestService manifestService,
+    CancellationToken ct)
+{
+    var currentUserId = httpContext.GetCurrentUserId();
+    var projectExists = await db.Projects
+        .AsNoTracking()
+        .AnyAsync(x => x.ProjectId == projectId, ct);
+    if (!projectExists)
+    {
+        return Results.NotFound();
+    }
+
+    try
+    {
+        var saved = await manifestService.SaveManifestVersionAsync(
+            projectId,
+            currentUserId,
+            request.Manifest,
+            request.ChangeSummary,
+            ct);
+        return Results.Ok(saved);
+    }
+    catch (ManifestConflictException ex)
+    {
+        return Results.Json(ex.Conflict, statusCode: 409);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+    catch (ManifestNotFoundException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
+}
+
+static async Task<IResult> GetManifestVersionsAsync(
+    Guid projectId,
+    int? take,
+    StitchUpDbContext db,
+    IProjectManifestService manifestService,
+    CancellationToken ct)
+{
+    var projectExists = await db.Projects
+        .AsNoTracking()
+        .AnyAsync(x => x.ProjectId == projectId, ct);
+    if (!projectExists)
+    {
+        return Results.NotFound();
+    }
+
+    var summaries = await manifestService.GetManifestVersionsAsync(projectId, take ?? 20, ct);
+    return Results.Ok(summaries);
+}
+
+static async Task<IResult> GetManifestDiffAsync(
+    Guid projectId,
+    int fromVersion,
+    int toVersion,
+    StitchUpDbContext db,
+    IProjectManifestService manifestService,
+    CancellationToken ct)
+{
+    var projectExists = await db.Projects
+        .AsNoTracking()
+        .AnyAsync(x => x.ProjectId == projectId, ct);
+    if (!projectExists)
+    {
+        return Results.NotFound();
+    }
+
+    try
+    {
+        var diff = await manifestService.GetManifestDiffAsync(projectId, fromVersion, toVersion, ct);
+        return Results.Ok(diff);
+    }
+    catch (ManifestNotFoundException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
+}
+
+static async Task<IResult> PublishManifestAsync(
+    Guid projectId,
+    int version,
+    HttpContext httpContext,
+    StitchUpDbContext db,
+    IProjectManifestService manifestService,
+    CancellationToken ct)
+{
+    var currentUserId = httpContext.GetCurrentUserId();
+    var project = await db.Projects
+        .AsNoTracking()
+        .FirstOrDefaultAsync(x => x.ProjectId == projectId, ct);
+    if (project is null)
+    {
+        return Results.NotFound();
+    }
+
+    if (project.AuthorUserId != currentUserId)
+    {
+        return Results.Forbid();
+    }
+
+    try
+    {
+        var published = await manifestService.PublishManifestVersionAsync(projectId, version, ct);
+        return Results.Ok(published);
+    }
+    catch (ManifestConflictException ex)
+    {
+        return Results.Json(ex.Conflict, statusCode: 409);
+    }
+    catch (ManifestNotFoundException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+}
+
+static async Task<IResult> GetPendingProposalsAsync(
+    Guid projectId,
+    HttpContext httpContext,
+    StitchUpDbContext db,
+    IProjectManifestService manifestService,
+    CancellationToken ct)
+{
+    var currentUserId = httpContext.GetCurrentUserId();
+    var project = await db.Projects
+        .AsNoTracking()
+        .FirstOrDefaultAsync(x => x.ProjectId == projectId, ct);
+    if (project is null)
+    {
+        return Results.NotFound();
+    }
+
+    if (project.AuthorUserId != currentUserId)
+    {
+        return Results.Forbid();
+    }
+
+    var proposals = await manifestService.GetPendingProposalsAsync(projectId, ct);
+    return Results.Ok(proposals);
+}
+
+static async Task<IResult> AcceptProposalAsync(
+    Guid projectId,
+    int version,
+    HttpContext httpContext,
+    StitchUpDbContext db,
+    IProjectManifestService manifestService,
+    CancellationToken ct)
+{
+    var currentUserId = httpContext.GetCurrentUserId();
+    var project = await db.Projects
+        .AsNoTracking()
+        .FirstOrDefaultAsync(x => x.ProjectId == projectId, ct);
+    if (project is null)
+    {
+        return Results.NotFound();
+    }
+
+    if (project.AuthorUserId != currentUserId)
+    {
+        return Results.Forbid();
+    }
+
+    try
+    {
+        var accepted = await manifestService.AcceptProposalAsync(projectId, version, currentUserId, ct);
+        return Results.Ok(accepted);
+    }
+    catch (ManifestConflictException ex)
+    {
+        return Results.Json(ex.Conflict, statusCode: 409);
+    }
+    catch (ManifestNotFoundException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+}
+
+static async Task<IResult> RejectProposalAsync(
+    Guid projectId,
+    int version,
+    HttpContext httpContext,
+    StitchUpDbContext db,
+    IProjectManifestService manifestService,
+    CancellationToken ct)
+{
+    var currentUserId = httpContext.GetCurrentUserId();
+    var project = await db.Projects
+        .AsNoTracking()
+        .FirstOrDefaultAsync(x => x.ProjectId == projectId, ct);
+    if (project is null)
+    {
+        return Results.NotFound();
+    }
+
+    if (project.AuthorUserId != currentUserId)
+    {
+        return Results.Forbid();
+    }
+
+    try
+    {
+        var rejected = await manifestService.RejectProposalAsync(projectId, version, currentUserId, ct);
+        return Results.Ok(rejected);
+    }
+    catch (ManifestNotFoundException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+}
 
 static void ValidateAzureStorageForDevelopment(AzureStorageSettings settings, BlobServiceClient blobServiceClient, ILogger logger)
 {
@@ -606,6 +1025,153 @@ static string MaskAccountName(string accountName)
     }
 
     return $"{accountName[..2]}***{accountName[^2..]}";
+}
+
+static async Task UpsertMediaBlobAsync(
+    StitchUpDbContext db,
+    Guid mediaId,
+    string blobRole,
+    string containerName,
+    string blobPath,
+    bool isTemporary,
+    DateTime? temporaryExpiresUtc,
+    DateTime utcNow,
+    CancellationToken ct)
+{
+    var normalizedPath = blobPath.Trim();
+    var normalizedContainer = containerName.Trim();
+
+    var existingExact = await db.MediaBlobs.FirstOrDefaultAsync(x =>
+        x.MediaId == mediaId &&
+        x.BlobRole == blobRole &&
+        x.ContainerName == normalizedContainer &&
+        x.BlobPath == normalizedPath &&
+        x.DeletedUtc == null, ct);
+
+    if (existingExact is not null)
+    {
+        existingExact.IsTemporary = isTemporary;
+        existingExact.TemporaryExpiresUtc = temporaryExpiresUtc;
+        return;
+    }
+
+    var existingByRole = await db.MediaBlobs.FirstOrDefaultAsync(x =>
+        x.MediaId == mediaId &&
+        x.BlobRole == blobRole &&
+        x.DeletedUtc == null, ct);
+
+    if (existingByRole is not null)
+    {
+        existingByRole.ContainerName = normalizedContainer;
+        existingByRole.BlobPath = normalizedPath;
+        existingByRole.IsTemporary = isTemporary;
+        existingByRole.TemporaryExpiresUtc = temporaryExpiresUtc;
+        return;
+    }
+
+    db.MediaBlobs.Add(new MediaBlobEntity
+    {
+        MediaBlobId = Guid.NewGuid(),
+        MediaId = mediaId,
+        BlobRole = blobRole,
+        ContainerName = normalizedContainer,
+        BlobPath = normalizedPath,
+        IsTemporary = isTemporary,
+        TemporaryExpiresUtc = temporaryExpiresUtc,
+        CreatedUtc = utcNow
+    });
+}
+
+static void ApplyCanonicalStorageState(MediaEntity media, DateTime utcNow)
+{
+    var isSaveOrShareCanonical = string.Equals(media.CloudConversionStatus, "CloudCanonical", StringComparison.OrdinalIgnoreCase);
+    var isCloudConverted = media.WasCloudConverted ||
+                           !string.IsNullOrWhiteSpace(media.OriginalBlobPath) ||
+                           string.Equals(media.CloudConversionStatus, "CloudTempConverted", StringComparison.OrdinalIgnoreCase);
+
+    if (isCloudConverted && !isSaveOrShareCanonical)
+    {
+        media.CanonicalBlobPath = media.BlobPath;
+        media.CanonicalContainer = "stitchup-media-converted";
+        media.StorageState = "CloudTempConverted";
+        media.IsTemporary = true;
+        media.TemporaryExpiresUtc = utcNow.AddDays(7);
+        media.CloudConversionStatus = "CloudTempConverted";
+        return;
+    }
+
+    if (isCloudConverted && isSaveOrShareCanonical)
+    {
+        media.CanonicalBlobPath = media.BlobPath;
+        media.CanonicalContainer = "stitchup-media-converted";
+        media.StorageState = "CloudCanonical";
+        media.IsTemporary = false;
+        media.TemporaryExpiresUtc = null;
+        media.OriginalBlobPath = null;
+        media.CloudConversionStatus = "CloudCanonical";
+        return;
+    }
+
+    media.CanonicalBlobPath = media.BlobPath;
+    media.CanonicalContainer = "stitchup-media";
+    media.StorageState = "CloudCanonical";
+    media.IsTemporary = false;
+    media.TemporaryExpiresUtc = null;
+}
+
+static void AddMediaBlobRows(StitchUpDbContext db, MediaEntity media, DateTime utcNow)
+{
+    if (!string.IsNullOrWhiteSpace(media.OriginalBlobPath))
+    {
+        db.MediaBlobs.Add(new MediaBlobEntity
+        {
+            MediaBlobId = Guid.NewGuid(),
+            MediaId = media.MediaId,
+            BlobRole = "Raw",
+            ContainerName = "stitchup-media-raw",
+            BlobPath = media.OriginalBlobPath,
+            IsTemporary = true,
+            TemporaryExpiresUtc = media.TemporaryExpiresUtc,
+            CreatedUtc = utcNow
+        });
+    }
+
+    if (!string.IsNullOrWhiteSpace(media.BlobPath))
+    {
+        db.MediaBlobs.Add(new MediaBlobEntity
+        {
+            MediaBlobId = Guid.NewGuid(),
+            MediaId = media.MediaId,
+            BlobRole = media.WasCloudConverted ? "Converted" : "Canonical",
+            ContainerName = media.WasCloudConverted ? "stitchup-media-converted" : "stitchup-media",
+            BlobPath = media.BlobPath,
+            IsTemporary = media.IsTemporary,
+            TemporaryExpiresUtc = media.TemporaryExpiresUtc,
+            CreatedUtc = utcNow
+        });
+    }
+
+    if (!string.IsNullOrWhiteSpace(media.CanonicalBlobPath) && !string.IsNullOrWhiteSpace(media.CanonicalContainer))
+    {
+        var alreadyCanonical = media.CanonicalBlobPath == media.BlobPath &&
+                               ((media.WasCloudConverted && media.CanonicalContainer == "stitchup-media-converted") ||
+                                (!media.WasCloudConverted && media.CanonicalContainer == "stitchup-media"));
+
+        if (!alreadyCanonical)
+        {
+            db.MediaBlobs.Add(new MediaBlobEntity
+            {
+                MediaBlobId = Guid.NewGuid(),
+                MediaId = media.MediaId,
+                BlobRole = "Canonical",
+                ContainerName = media.CanonicalContainer,
+                BlobPath = media.CanonicalBlobPath,
+                IsTemporary = media.IsTemporary,
+                TemporaryExpiresUtc = media.TemporaryExpiresUtc,
+                CreatedUtc = utcNow
+            });
+        }
+    }
 }
 
 static string BuildProjectTitle(string? title, string? description)

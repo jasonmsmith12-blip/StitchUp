@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "Swf8pqAkHzA=",
+  "dgSpecHash": "K3Abgwcm0Kg=",
   "success": true,
-  "projectFilePath": "C:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Api\\StitchUp.Api.csproj",
+  "projectFilePath": "c:\\source\\StichUp\\StitchUp.Backend\\StitchUp.Api\\StitchUp.Api.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\jason\\.nuget\\packages\\azure.core\\1.50.0\\azure.core.1.50.0.nupkg.sha512",
     "C:\\Users\\jason\\.nuget\\packages\\azure.identity\\1.14.2\\azure.identity.1.14.2.nupkg.sha512",

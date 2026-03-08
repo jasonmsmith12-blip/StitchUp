@@ -24,6 +24,16 @@ public class MediaEntity
 
     public string? CloudConversionError { get; set; }
 
+    public string? CanonicalBlobPath { get; set; }
+
+    public string? CanonicalContainer { get; set; }
+
+    public string StorageState { get; set; } = "LocalOnly";
+
+    public bool IsTemporary { get; set; }
+
+    public DateTime? TemporaryExpiresUtc { get; set; }
+
     public DateTime CreatedUtc { get; set; }
 
     public UserEntity AuthorUser { get; set; } = null!;
@@ -31,4 +41,6 @@ public class MediaEntity
     public ICollection<ProjectMediaEntity> ProjectMedia { get; set; } = new List<ProjectMediaEntity>();
 
     public ICollection<MediaConversionAttemptEntity> ConversionAttempts { get; set; } = new List<MediaConversionAttemptEntity>();
+
+    public ICollection<MediaBlobEntity> MediaBlobs { get; set; } = new List<MediaBlobEntity>();
 }

@@ -21,3 +21,4 @@ C:\source\StichUp\StitchUp.Backend\.artifacts\api-build-check\StitchUp.Applicati
 C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\StitchUp.Application.deps.json
 C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\StitchUp.Application.dll
 C:\source\StichUp\StitchUp.Backend\StitchUp.Api\bin\Debug\net10.0-validate\StitchUp.Application.pdb
+C:\source\StichUp\StitchUp.Backend\StitchUp.Application\obj\Debug\net10.0\StitchUp.Application.sourcelink.json

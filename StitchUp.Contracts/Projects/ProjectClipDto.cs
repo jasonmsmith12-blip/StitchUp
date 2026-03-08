@@ -24,5 +24,17 @@ public class ProjectClipDto
 
     public string BlobPath { get; set; } = string.Empty;
 
+    public bool WasCloudConverted { get; set; }
+
+    public string CloudConversionStatus { get; set; } = string.Empty;
+
+    public string? CanonicalBlobPath { get; set; }
+
+    public string? CanonicalContainer { get; set; }
+
+    public string StorageState { get; set; } = string.Empty;
+
+    public bool IsTemporary { get; set; }
+
     public DateTime CreatedUtc { get; set; }
 }
